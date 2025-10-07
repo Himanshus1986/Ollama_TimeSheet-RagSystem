@@ -1,0 +1,33 @@
+
+# Ultimate Timesheet API Testing & Gradio Interface Requirements
+
+# Core dependencies
+fastapi
+uvicorn
+pydantic
+pyodbc
+python-dateutil
+python-multipart
+python-dotenv
+
+# Enhanced date parsing
+dateparser
+
+# Testing dependencies
+pytest
+httpx
+requests
+
+# Gradio interface
+gradio
+pandas
+
+# Data handling
+numpy
+
+# Optional: LLM features (uncomment if using Ollama)
+ollama
+
+# Development tools (optional)
+black
+isort
