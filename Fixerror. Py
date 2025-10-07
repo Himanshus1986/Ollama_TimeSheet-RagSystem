@@ -1,0 +1,146 @@
+import gradio as gr
+import requests
+import json
+import asyncio
+import time
+import os
+import getpass
+from datetime import datetime
+from typing import Optional, Tuple, List, Dict, Any
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# API Configurations
+timesheet_baseurl = "http://localhost:8000"
+timesheet_endpoint = "chat"
+hrpolicy_baseurl = "http://localhost:8001"
+hrpolicy_endpoint = "query"
+
+TITLE = "Enterprise Assistant"
+
+# Helper function to select service
+def select_service(service: str, email: str, state: Dict[str, Any]):
+    state["service"] = service
+    state["email"] = email
+    return (
+        gr.update(visible=False),  # Hide welcome screen
+        gr.update(visible=True),   # Show chat interface
+        [],                        # Clear chat display
+        "",                        # Clear message input
+        gr.update(interactive=True),
+        "",                        # Hide status display
+        state,
+    )
+
+# Welcome HTML with clickable tiles
+def create_welcome_html(username: str) -> str:
+    return f"""
+    <style>
+        .service-tile {{
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: box-shadow 0.2s ease;
+        }}
+        .service-tile:hover {{
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }}
+        .tiles {{ display: flex; gap: 20px; justify-content: center; }}
+    </style>
+    <div style="text-align:center;">
+        <h1>{TITLE}</h1>
+        <p>Welcome, {username}!</p>
+        <div class="tiles">
+            <div class="service-tile" onclick="window.selectTimesheet()">
+                <img src="https://img.icons8.com/fluency/48/000000/alarm-clock.png"/>
+                <h3>Timesheet Management</h3>
+                <p>Manage Oracle and Mars timesheets with AI assistance</p>
+            </div>
+            <div class="service-tile" onclick="window.selectHRPolicy()">
+                <img src="https://img.icons8.com/dusk/48/000000/clipboard.png"/>
+                <h3>HR Policy Assistant</h3>
+                <p>Get answers about policies and HR documents</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        window.selectTimesheet = function() {
+            const btn = document.getElementById('hidden-timesheet-btn');
+            if (btn) btn.click();
+            else console.error('Hidden timesheet button not found');
+        }
+        window.selectHRPolicy = function() {
+            const btn = document.getElementById('hidden-hr-policy-btn');
+            if (btn) btn.click();
+            else console.error('Hidden HR policy button not found');
+        }
+    </script>
+    """
+
+# Build Gradio Interface
+with gr.Blocks(css=".hidden-button{display:none;}") as app:
+    state = gr.State({"chat_history": [], "service": None, "email": None})
+    email_input = gr.Textbox(label="Email",
+                             value=getpass.getuser() + "@company.com",
+                             interactive=False)
+
+    # Hidden service buttons
+    with gr.Row(visible=False):
+        timesheet_btn = gr.Button("Hidden Timesheet",
+                                  elem_id="hidden-timesheet-btn")
+        hrpolicy_btn = gr.Button("Hidden HR Policy",
+                                 elem_id="hidden-hr-policy-btn")
+
+    # Welcome screen
+    welcomescreen = gr.HTML(create_welcome_html(getpass.getuser()),
+                            elem_id="welcome-screen")
+
+    # Chat interface
+    chat_interface = gr.Column(visible=False, elem_id="chat-interface")
+    with chat_interface:
+        chat_display = gr.Chatbot()
+        msg_input = gr.Textbox(show_label=False,
+                               placeholder="Type your message...",
+                               interactive=False)
+        send_btn = gr.Button("Send", interactive=False)
+        status_display = gr.Markdown(visible=False)
+
+    # Button click handlers
+    timesheet_btn.click(
+        fn=lambda e, s: select_service("timesheet", e, s),
+        inputs=[email_input, state],
+        outputs=[welcomescreen, chat_interface, chat_display,
+                 msg_input, send_btn, status_display, state],
+    )
+    hrpolicy_btn.click(
+        fn=lambda e, s: select_service("hrpolicy", e, s),
+        inputs=[email_input, state],
+        outputs=[welcomescreen, chat_interface, chat_display,
+                 msg_input, send_btn, status_display, state],
+    )
+
+    # Message send handler
+    def send_message(message: str, state: Dict[str, Any]):
+        service = state.get("service")
+        email = state.get("email")
+        if service == "timesheet":
+            url = f"{timesheet_baseurl}/{timesheet_endpoint}"
+            payload = {"message": message, "email": email}
+        else:
+            url = f"{hrpolicy_baseurl}/{hrpolicy_endpoint}"
+            payload = {"query": message, "email": email}
+        response = requests.post(url, json=payload)
+        reply = response.json().get("reply", "Error: no response")
+        state["chat_history"].append((message, reply))
+        return state["chat_history"], "", state
+
+    msg_input.submit(send_message, [msg_input, state],
+                     [chat_display, msg_input, state])
+    send_btn.click(send_message, [msg_input, state],
+                   [chat_display, msg_input, state])
+
+app.launch(server_name="0.0.0.0", server_port=int(os.getenv("PORT", 7860)))
