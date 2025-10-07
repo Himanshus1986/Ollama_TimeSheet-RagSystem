@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+gradio
+requests
+ollama
+langchain
+langchain-community
+pypdf
+chromadb
+sentence-transformers
+pydantic
+python-multipart
